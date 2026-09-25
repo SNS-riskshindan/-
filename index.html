@@ -175,6 +175,7 @@ main{max-width:760px;margin:0 auto;width:100%;flex:1;display:flex;flex-direction
   .card{box-shadow:none;border-color:#ccc;break-inside:avoid;page-break-inside:avoid}
   .fix-item,.answers-table tr,.weak-combo{break-inside:avoid;page-break-inside:avoid}
   .section-title{break-after:avoid;page-break-after:avoid}
+  .print-new-page{break-before:page;page-break-before:always}
 }
 </style>
 
@@ -297,7 +298,7 @@ main{max-width:760px;margin:0 auto;width:100%;flex:1;display:flex;flex-direction
       </div>
     </div>
 
-    <div class="card">
+    <div class="card print-new-page">
       <div class="section-title" style="padding:20px 26px 0">重点対策カテゴリー</div>
       <div class="fix-list" id="fix-list"></div>
     </div>

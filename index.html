@@ -131,6 +131,7 @@ main{max-width:760px;margin:0 auto;width:100%;flex:1;display:flex;flex-direction
 
 .weak-combo{padding:20px 26px;display:flex;gap:14px;align-items:flex-start}
 .weak-combo .icon{flex:none;width:38px;height:38px;border-radius:10px;background:var(--grade-d-soft);color:var(--grade-d);display:flex;align-items:center;justify-content:center}
+.weak-combo.ok .icon{background:var(--grade-a-soft);color:var(--grade-a)}
 .weak-combo .icon svg{width:19px;height:19px}
 .weak-combo .body b{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:4px;font-weight:700}
 .weak-combo .body p{font-size:14px;line-height:1.75;margin:0}
@@ -288,8 +289,8 @@ main{max-width:760px;margin:0 auto;width:100%;flex:1;display:flex;flex-direction
 
     <div class="card">
       <div class="section-title" style="padding:20px 26px 0">想定リスク</div>
-      <div class="weak-combo">
-        <div class="icon">
+      <div class="weak-combo" id="weak-combo-box">
+        <div class="icon" id="weak-icon">
           <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4M12 17v.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </div>
         <div class="body">
@@ -298,7 +299,7 @@ main{max-width:760px;margin:0 auto;width:100%;flex:1;display:flex;flex-direction
       </div>
     </div>
 
-    <div class="card print-new-page">
+    <div class="card print-new-page" id="fix-card">
       <div class="section-title" style="padding:20px 26px 0">重点対策カテゴリー</div>
       <div class="fix-list" id="fix-list"></div>
     </div>
@@ -482,6 +483,18 @@ var COMBO_COMMENTS = {
   "④-⑤":"外部からの炎上に巻き込まれるリスクが高い状態です。対応を誤ると炎上を拡大させてしまうおそれがあるため、事前の対応ルールを整備しましょう。"
 };
 
+/* 5カテゴリーすべてが満点（5点）のときに表示する文言（弱点カテゴリーなし） */
+var ALL_CLEAR_COMMENT = "特に弱点となるカテゴリーは見当たりません。現在の高い水準を維持しつつ、更なる防衛力の強化に備えましょう。";
+
+/* 弱点カテゴリーが1つだけのときに表示する文言（該当カテゴリーのみ） */
+var SINGLE_COMMENTS = {
+  "①":"ソーシャルリスクの検知体制に、わずかに伸びしろがあります。モニタリングの精度や範囲を見直すことで、さらに盤石な体制になります。",
+  "②":"従業員の個人利用におけるリスク対策に、わずかに伸びしろがあります。社内ルールの周知や更新頻度を見直すことで、さらに盤石な体制になります。",
+  "③":"アカウント運用の発信リスク対策に、わずかに伸びしろがあります。運用ルールや管理体制を見直すことで、さらに盤石な体制になります。",
+  "④":"外部からの巻き込まれリスク対策に、わずかに伸びしろがあります。なりすまし監視や把握体制を見直すことで、さらに盤石な体制になります。",
+  "⑤":"インシデント発生時の対策に、わずかに伸びしろがあります。対応フローや訓練の実効性を見直すことで、さらに盤石な体制になります。"
+};
+
 function normalize5(pct){
   if(pct>=0.90) return 5;
   if(pct>=0.80) return 4;
@@ -659,19 +672,40 @@ function buildResult(){
     normalized[c] = catMax[c]>0 ? normalize5(catRaw[c]/catMax[c]) : 1;
   });
 
+  var weakInfo = resolveWeakInfo(normalized);
+
+  renderResultHero(band, overallPct);
+  renderIdentity();
+  drawRadar(normalized);
+  renderWeakCombo(weakInfo);
+  renderCategoryFixes(weakInfo.weak);
+  renderAnswers();
+  submitInternalRecord(band, overallPct, normalized, weakInfo);
+}
+
+/* ------------------------------------------------------------------
+   弱点カテゴリーの判定
+   ・5カテゴリーすべて5点 → 弱点なし（重点対策カテゴリーは非表示）
+   ・5点以外が1カテゴリーだけ → そのカテゴリー1つだけを表示
+   ・それ以外（通常） → 得点の低い2カテゴリーの組み合わせを表示
+------------------------------------------------------------------- */
+function resolveWeakInfo(normalized){
+  var belowMax = CATEGORIES.filter(function(c){ return normalized[c] < 5; });
+
+  if(belowMax.length === 0){
+    return { weak: [], comment: ALL_CLEAR_COMMENT };
+  }
+  if(belowMax.length === 1){
+    var only = belowMax[0];
+    return { weak: [only], comment: SINGLE_COMMENTS[only] || "" };
+  }
+
   var ranked = CATEGORIES.slice().sort(function(a,b){
     return normalized[a]-normalized[b] || (a<b?-1:1);
   });
   var weak = [ranked[0], ranked[1]].sort();
   var comboKey = weak[0] + "-" + weak[1];
-
-  renderResultHero(band, overallPct);
-  renderIdentity();
-  drawRadar(normalized);
-  renderWeakCombo(weak, comboKey);
-  renderCategoryFixes(weak);
-  renderAnswers();
-  submitInternalRecord(band, overallPct, normalized, weak, comboKey);
+  return { weak: weak, comment: COMBO_COMMENTS[comboKey] || "該当するコメントが未設定です。" };
 }
 
 /* ------------------------------------------------------------------
@@ -684,9 +718,11 @@ function buildResult(){
    メール送信を行います。お客様の画面には一切表示されません。
 ------------------------------------------------------------------- */
 var _internalRecordSent = false;
-function submitInternalRecord(band, overallPct, normalized, weak, comboKey){
+function submitInternalRecord(band, overallPct, normalized, weakInfo){
   if(_internalRecordSent) return; // 二重送信防止
   _internalRecordSent = true;
+
+  var weak = weakInfo.weak;
 
   var scoredAnswers = state.path
     .filter(function(id){ return Q_BY_ID[id].scored !== false; })
@@ -703,7 +739,7 @@ function submitInternalRecord(band, overallPct, normalized, weak, comboKey){
       return { id:id, question:Q_BY_ID[id].text, answer: texts.join("、") || null };
     });
 
-  var fixItems = [weak[0], weak[1]].map(function(c){
+  var fixItems = weak.map(function(c){
     return {
       num: catNum(c),
       name: CATEGORY_NAMES[c],
@@ -726,7 +762,7 @@ function submitInternalRecord(band, overallPct, normalized, weak, comboKey){
     categoryScores: normalized,
     categoryNames: CATEGORY_NAMES,
     weakCategories: weak,
-    weakComment: COMBO_COMMENTS[comboKey] || "",
+    weakComment: weakInfo.comment,
     fixItems: fixItems,
     answers: scoredAnswers,
     checklistAnswers: checklistAnswers
@@ -747,6 +783,9 @@ function submitInternalRecord(band, overallPct, normalized, weak, comboKey){
 }
 
 function renderCategoryFixes(weak){
+  var card = document.getElementById("fix-card");
+  if(card){ card.style.display = weak.length ? "" : "none"; }
+
   var list = document.getElementById("fix-list");
   list.innerHTML = "";
   weak.forEach(function(c){
@@ -856,8 +895,16 @@ function drawRadar(normalized){
   });
 }
 
-function renderWeakCombo(weak, key){
-  document.getElementById("weak-comment").textContent = COMBO_COMMENTS[key] || "該当するコメントが未設定です。";
+var WARN_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4M12 17v.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+var OK_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 21a9 9 0 100-18 9 9 0 000 18z" stroke="currentColor" stroke-width="1.8"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function renderWeakCombo(weakInfo){
+  document.getElementById("weak-comment").textContent = weakInfo.comment;
+  var isOk = weakInfo.weak.length === 0;
+  var box = document.getElementById("weak-combo-box");
+  if(box){ box.classList.toggle("ok", isOk); }
+  var icon = document.getElementById("weak-icon");
+  if(icon){ icon.innerHTML = isOk ? OK_ICON_SVG : WARN_ICON_SVG; }
 }
 
 function renderAnswers(){

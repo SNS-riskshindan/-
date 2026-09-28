@@ -147,6 +147,7 @@ main{max-width:760px;margin:0 auto;width:100%;flex:1;display:flex;flex-direction
 .fix-item .fbody .sub{display:block;font-size:12px;color:var(--ink-soft);margin-top:1px;margin-bottom:8px}
 .fix-item .fbody p{font-size:14px;line-height:1.8;margin:0;color:var(--ink-soft)}
 .fix-item .fbody p + p{margin-top:6px}
+.fix-item .fbody p.service-line{color:#000;font-weight:700}
 
 .answers-table{width:100%;border-collapse:collapse}
 .answers-table th{text-align:left;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);padding:8px 10px;border-bottom:1px solid var(--line)}
@@ -792,7 +793,11 @@ function renderCategoryFixes(weak){
   weak.forEach(function(c){
     var item = document.createElement("div");
     item.className = "fix-item";
-    var paras = CATEGORY_COMMENTS[c].map(function(line){ return "<p>"+line+"</p>"; }).join("");
+    var paras = CATEGORY_COMMENTS[c].map(function(line){
+      var isService = line.indexOf("対策サービス：") > -1;
+      var text = isService ? line.replace(/^\n/, "") : line;
+      return "<p"+(isService ? ' class="service-line"' : '')+">"+text+"</p>";
+    }).join("");
     item.innerHTML =
       '<span class="num">'+catNum(c)+'</span>' +
       '<div class="fbody">' +
